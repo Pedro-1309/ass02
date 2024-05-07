@@ -1,16 +1,20 @@
 var stopped = false;
+const linkRegex = 'href=".*"';
+var scrapeToComplete = 0;
 
 function onSubmit() {
     document.getElementById("startButton").setAttribute("disabled", true)
     console.log("submitted")
     if (document.getElementById("word").value != "" &&
-        document.getElementById("depth").value >= 0)
+        document.getElementById("depth").value >= 0) {
         scrape(
             document.getElementById("inputUrl").value,
             document.getElementById("word").value,
             document.getElementById("depth").value,
             0
         )
+    }
+
 }
 
 function onStop() {
@@ -20,36 +24,52 @@ function onStop() {
 }
 
 async function scrape(url, word, maxDepth, currentDepth) {
-    if (!stopped && currentDepth <= maxDepth)
-        fetch(url).then((response) => {
+    if (!stopped && currentDepth <= maxDepth) {
+        fetch(url).then(async (response) => {
             if (!response.ok)
                 updatePage(" Couldn't connet to page: " + url)
             else {
-                response.text().then(text => {
-                    // call scrape on all links in the current page
-                    console.log("scraping: " + text + "\n word: " + word + "\n depth: " + currentDepth)
-                    console.log(
-                        text.match('href=".*"').length
-                    );
-                    if (text.match('href=".*"') != null)
-                        text.match('href=".*"')
-                            .map(t => t.replace('href="', ''))
-                            .map(t => t.substring(0, t.length - 1))
-                            .forEach(t => scrape(t, word, maxDepth, currentDepth + 1))
+                response.text().then(async text => {
                     // write the occurrences of the word in the current page
-                    var textCopy = text
-                    var index = textCopy.indexOf(word)
                     var count = 0
-                    while (index != -1) {
+                    for (const match of text.matchAll(word)) {
                         count++
-                        textCopy = textCopy.replace(word, "")
-                        index = textCopy.indexOf(word)
                     }
                     if (count > 0)
                         updatePage(count + " occurrences of word \"" + word + "\" in url \"" + url + "\" at depth " + currentDepth)
+                    return text
+                }).then(text => {
+                    // call scrape on all links in the current page
+                    if (text.match(linkRegex) != null) {
+                        if (currentDepth == (maxDepth - 1)) {
+                            for (const match of text.matchAll(linkRegex)) {
+                                scrapeToComplete ++
+                            }
+                            console.log(scrapeToComplete);
+                        }
+                        if (maxDepth == currentDepth) {
+                            scrapeToComplete --
+                            console.log(scrapeToComplete);
+                            if (scrapeToComplete == 0)
+                                updateEnd("Scrape completed!")
+                        } else {
+                            text.matchAll(linkRegex)
+                                .forEach(regExpExecArray => {
+                                    var stringMatched = regExpExecArray[0]
+                                    var url = stringMatched.replace('href="', '')
+                                    url = url.substring(0, url.length - 1)
+                                    scrape(url, word, maxDepth, currentDepth + 1)
+                                })
+                        }
+                    }
                 })
             }
         });
+    }
+}
+
+function updatePage(value)  {
+    document.getElementById("end").innerText = value;
 }
 
 function updatePage(value)  {
